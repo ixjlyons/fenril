@@ -3,6 +3,13 @@ import popplerqt5
 
 inter_page_space = 10
 
+key_map = {
+    QtCore.Qt.Key_H: QtCore.Qt.Key_Left,
+    QtCore.Qt.Key_J: QtCore.Qt.Key_Down,
+    QtCore.Qt.Key_K: QtCore.Qt.Key_Up,
+    QtCore.Qt.Key_L: QtCore.Qt.Key_Right
+}
+
 
 class PdfView(QtWidgets.QGraphicsView):
 
@@ -37,7 +44,6 @@ class PdfView(QtWidgets.QGraphicsView):
         Loads the specified document using Poppler, sets up each page in the
         QGraphicsScene.
         """
-        print("loading document")
         self.filename = filename
 
         self.doc = popplerqt5.Poppler.Document.load(filename)
@@ -96,18 +102,15 @@ class PdfView(QtWidgets.QGraphicsView):
         self.page_scene.clear()
 
     def load_page(self, page_number):
-        print("loading page {}".format(page_number))
         res_x = self.dpi_x * self.zoom_factor
         res_y = self.dpi_y * self.zoom_factor
         image = self.pages[page_number].renderToImage(res_x, res_y)
 
         if image.isNull():
-            print("image is null")
             return
 
         page_item = self.page_scene.addPixmap(QtGui.QPixmap.fromImage(image))
         m = self.map_from_page(page_number, QtCore.QPointF(0, 0))
-        print(m)
         page_item.setOffset(self.map_from_page(
             page_number, QtCore.QPointF(0, 0)))
         page_item.setData(1, page_number)
@@ -146,11 +149,10 @@ class PdfView(QtWidgets.QGraphicsView):
                     (page_number > page_number_end + buf and
                         page_number < page_count)):
                 self.page_scene.removeItem(items[i])
-                del items[i]
+                #del items[i]
                 self.pages_loaded[page_number] = False
 
     def set_page(self, page_number, keep_pos=False):
-        print("set page {}".format(page_number))
         page_number_start = page_number
         page_number_end = page_number
         max_top_position = (self.page_top_positions[page_number_start] +
@@ -271,10 +273,23 @@ class PdfView(QtWidgets.QGraphicsView):
                 if self.page_top_positions[i] > vbarval:
                     break
                 page_num += 1
-            page_num -= 1
             if page_num < 0:
                 page_num = 0
 
             if self.page_number != page_num:
                 self.set_page(page_num, False)
                 self.page_number = page_num
+
+    def keyPressEvent(self, event):
+        newevent = None
+        key = event.key()
+        if key in key_map:
+            newevent = QtGui.QKeyEvent(QtCore.QEvent.KeyPress,
+                                       key_map[key],
+                                       event.modifiers())
+
+        if newevent is not None:
+            super().keyPressEvent(newevent)
+        else:
+            super().keyPressEvent(event)
+
