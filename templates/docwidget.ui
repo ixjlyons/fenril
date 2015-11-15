@@ -15,53 +15,19 @@
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
-    <widget class="QSplitter" name="splitter">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+    <widget class="PdfView" name="graphicsView">
+     <property name="backgroundBrush">
+      <brush brushstyle="SolidPattern">
+       <color alpha="255">
+        <red>117</red>
+        <green>117</green>
+        <blue>117</blue>
+       </color>
+      </brush>
      </property>
-     <property name="childrenCollapsible">
-      <bool>false</bool>
+     <property name="renderHints">
+      <set>QPainter::Antialiasing|QPainter::TextAntialiasing</set>
      </property>
-     <widget class="PdfView" name="graphicsView">
-      <property name="backgroundBrush">
-       <brush brushstyle="SolidPattern">
-        <color alpha="255">
-         <red>0</red>
-         <green>0</green>
-         <blue>0</blue>
-        </color>
-       </brush>
-      </property>
-      <property name="renderHints">
-       <set>QPainter::Antialiasing|QPainter::TextAntialiasing</set>
-      </property>
-     </widget>
-     <widget class="QTabWidget" name="tabWidget">
-      <property name="minimumSize">
-       <size>
-        <width>250</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="currentIndex">
-       <number>0</number>
-      </property>
-      <widget class="QWidget" name="infoTab">
-       <attribute name="title">
-        <string>Info</string>
-       </attribute>
-      </widget>
-      <widget class="QWidget" name="notesTab">
-       <attribute name="title">
-        <string>Notes</string>
-       </attribute>
-       <layout class="QGridLayout" name="gridLayout_2">
-        <item row="0" column="0">
-         <widget class="QTextEdit" name="notesTextEdit"/>
-        </item>
-       </layout>
-      </widget>
-     </widget>
     </widget>
    </item>
   </layout>

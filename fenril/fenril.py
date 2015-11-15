@@ -15,10 +15,14 @@ def main():
     parser.add_argument(
         '-b', '--bibfile',
         help="BibTeX file to use for the library.")
+    parser.add_argument(
+        '-p', '--pdfdir',
+        help="Path to directory containing PDF documents.")
     args = parser.parse_args()
 
     app = QApplication([])
-    main_window = mainwindow.MainWindow(bibfile=args.bibfile)
+    main_window = mainwindow.MainWindow(bibfile=args.bibfile,
+                                        pdfdir=args.pdfdir)
     main_window.show()
     app.exec_()
     app.deleteLater()

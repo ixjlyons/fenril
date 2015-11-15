@@ -10,17 +10,20 @@ from fenril import docwidget
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, parent=None, bibfile=None):
+    def __init__(self, parent=None, bibfile=None, pdfdir=None):
         super(MainWindow, self).__init__(parent)
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
+        self.bibfile = bibfile
+        self.pdfdir = pdfdir
+
         if bibfile:
             self.init_bib(bibfile)
 
         self.doc_tabs = []
-        self.ui.tableView.doubleClicked.connect(self.doubleclick_callback)
+        self.ui.tableView.doubleClicked.connect(self.on_item_doubleclick)
 
         self.init_tab_widget()
 
@@ -37,7 +40,7 @@ class MainWindow(QMainWindow):
             # TODO show warning and return
             return
 
-        model = Model(bib_data.entries)
+        model = LibraryTableModel(bib_data.entries)
         self.ui.tableView.setModel(model)
         self.ui.tableView.resizeColumnsToContents()
         self.ui.tableView.horizontalHeader().sortIndicatorChanged.connect(
@@ -45,33 +48,40 @@ class MainWindow(QMainWindow):
 
     def on_tab_close(self, index):
         if index == 0:
+            # don't let the library table tab be closed
             return
+        self.ui.tabWidget.widget(index).close()
         self.ui.tabWidget.removeTab(index)
-        del(self.doc_tabs[index-1])
 
-    def doubleclick_callback(self, index):
-        data = self.ui.tableView.model().item(index)
-        widget = docwidget.DocWidget()
-        self.doc_tabs.append({'data': data, 'widget': widget})
-        self.ui.tabWidget.addTab(widget, _get_val(data, 'title'))
+    def on_item_doubleclick(self, index):
+        if self.pdfdir is None:
+            return
 
-        filepath = os.path.abspath(
-            os.path.join(
-                os.path.dirname(self.bibfile),
-                'pdfs',
-                data['ID'] + '.pdf'))
-        if os.path.isfile(filepath):
-            widget.render_pdf(filepath)
+        entry = self.ui.tableView.model().item(index)
+        name = _get_val(entry, 'ID')
 
+        # if tab for this doc is already open, switch to it
+        for i in range(self.ui.tabWidget.count()):
+            if self.ui.tabWidget.tabText(i) == name:
+                self.ui.tabWidget.setCurrentIndex(i)
+                return
+
+        filepath = os.path.abspath(os.path.join(self.pdfdir, name+'.pdf'))
+        if not os.path.isfile(filepath):
+            return
+
+        widget = docwidget.DocWidget(entry)
+        widget.load(filepath)
+        self.ui.tabWidget.addTab(widget, name)
         self.ui.tabWidget.setCurrentWidget(widget)
 
 
-class Model(QAbstractTableModel):
+class LibraryTableModel(QAbstractTableModel):
 
     COLS = ['author', 'title', 'year']
 
     def __init__(self, entries, parent=None):
-        super(Model, self).__init__(parent)
+        super(LibraryTableModel, self).__init__(parent)
         self.entries = entries
 
     def headerData(self, section, orientation, role):
@@ -123,7 +133,7 @@ class Model(QAbstractTableModel):
         return len(self.entries)
 
     def columnCount(self, parent=QModelIndex()):
-        return 3
+        return len(self.COLS)
 
 
 def _get_val(entry, key):

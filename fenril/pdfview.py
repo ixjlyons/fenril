@@ -33,6 +33,10 @@ class PdfView(QtWidgets.QGraphicsView):
         return self.zoom_factor * self.dpi_y / 72.0
 
     def load_document(self, filename):
+        """
+        Loads the specified document using Poppler, sets up each page in the
+        QGraphicsScene.
+        """
         print("loading document")
         self.filename = filename
 
@@ -86,6 +90,10 @@ class PdfView(QtWidgets.QGraphicsView):
         self.verticalScrollBar().valueChanged.connect(
             self.on_vertical_position_changed)
         self.set_page(0)
+
+    def close(self):
+        del self.pages[:]
+        self.page_scene.clear()
 
     def load_page(self, page_number):
         print("loading page {}".format(page_number))
