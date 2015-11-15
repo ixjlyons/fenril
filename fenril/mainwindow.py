@@ -1,9 +1,8 @@
 import os
 import bibtexparser
 
-from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex, QVariant, QUrl
+from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex, QVariant
 from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtGui import QDesktopServices
 
 from fenril.ui.mainwindow import Ui_MainWindow
 from fenril import docwidget
@@ -23,6 +22,11 @@ class MainWindow(QMainWindow):
         self.doc_tabs = []
         self.ui.tableView.doubleClicked.connect(self.doubleclick_callback)
 
+        self.init_tab_widget()
+
+    def init_tab_widget(self):
+        self.ui.tabWidget.tabCloseRequested.connect(self.on_tab_close)
+
     def init_bib(self, bibfile):
         self.bibfile = bibfile
         bib_data = None
@@ -39,6 +43,12 @@ class MainWindow(QMainWindow):
         self.ui.tableView.horizontalHeader().sortIndicatorChanged.connect(
             self.ui.tableView.sortByColumn)
 
+    def on_tab_close(self, index):
+        if index == 0:
+            return
+        self.ui.tabWidget.removeTab(index)
+        del(self.doc_tabs[index-1])
+
     def doubleclick_callback(self, index):
         data = self.ui.tableView.model().item(index)
         widget = docwidget.DocWidget()
@@ -48,11 +58,12 @@ class MainWindow(QMainWindow):
         filepath = os.path.abspath(
             os.path.join(
                 os.path.dirname(self.bibfile),
-                'files',
+                'pdfs',
                 data['ID'] + '.pdf'))
         if os.path.isfile(filepath):
-            #widget.render_pdf(filepath)
-            QDesktopServices.openUrl(QUrl.fromLocalFile(filepath))
+            widget.render_pdf(filepath)
+
+        self.ui.tabWidget.setCurrentWidget(widget)
 
 
 class Model(QAbstractTableModel):
@@ -94,8 +105,8 @@ class Model(QAbstractTableModel):
         if order == Qt.AscendingOrder:
             self.entries = sorted(self.entries, key=lambda k: k[colname])
         else:
-            self.entries = sorted(self.entries, key=lambda k: k[colname],
-                reverse=True)
+            self.entries = sorted(
+                self.entries, key=lambda k: k[colname], reverse=True)
 
         self.layoutChanged.emit()
 

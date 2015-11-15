@@ -31,3 +31,12 @@ Dependencies
 * [python-bibtexparser](https://github.com/sciunto-org/python-bibtexparser)
 
 * [python-poppler-qt5](https://github.com/wbsoft/python-poppler-qt5)
+
+
+Acknowledgments
+---------------
+
+The embedded viewer code has been directly guided by
+[PdfViewer](http://qt-apps.org/content/show.php?content=149637). It might be
+a better option to figure out how to use the library component of that project
+and embed the `PdfView` view.

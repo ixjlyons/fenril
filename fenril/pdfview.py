@@ -3,11 +3,11 @@ import popplerqt5
 
 inter_page_space = 10
 
+
 class PdfView(QtWidgets.QGraphicsView):
 
     def __init__(self, parent=None):
         super(PdfView, self).__init__(parent)
-        #self.scrollPositionChanged.connect(self.on_scroll_position_changed)
 
         self.dpi_x = QtWidgets.QApplication.desktop().physicalDpiX()
         self.dpi_y = QtWidgets.QApplication.desktop().physicalDpiY()
@@ -15,7 +15,14 @@ class PdfView(QtWidgets.QGraphicsView):
         self.zoom_factor = 1
         self.page_number = 0
 
+        self.vertical_position_timer = QtCore.QTimer()
+        self.vertical_position_timer.setSingleShot(True)
+        self.vertical_position_timer.setInterval(0)
+        self.vertical_position_timer.timeout.connect(
+            self.on_vertical_position_changed)
+
         self.page_scene = QtWidgets.QGraphicsScene()
+        self.setScene(self.page_scene)
 
     @property
     def scale_factor_x(self):
@@ -26,6 +33,7 @@ class PdfView(QtWidgets.QGraphicsView):
         return self.zoom_factor * self.dpi_y / 72.0
 
     def load_document(self, filename):
+        print("loading document")
         self.filename = filename
 
         self.doc = popplerqt5.Poppler.Document.load(filename)
@@ -57,31 +65,41 @@ class PdfView(QtWidgets.QGraphicsView):
             # black border
             rect = self.page_scene.addRect(
                 page_rect, QtGui.QPen(QtGui.QBrush(QtCore.Qt.black), 1))
+            rect.setZValue(1)
+            rect.setData(0, i)
 
             # white background
             self.page_scene.addRect(
                 page_rect, QtGui.QPen(), QtGui.QBrush(QtCore.Qt.white))
 
-            rect.setZValue(1)
-            rect.setData(0, i)
-
             self.pages_loaded.append(False)
 
-        self.page_scene.setSceneRect(0, 0,
+        self.page_top_positions.append(
+            (self.page_top_positions[-1] +
+                self.pages[-1].pageSizeF().height() +
+                inter_page_space/2))
+        self.page_scene.setSceneRect(
+            0, 0,
             (max_page_width+inter_page_space)*self.scale_factor_x+2,
             self.page_top_positions[-1]*self.scale_factor_y+2)
 
-        # TODO connect vertical scrollbar value changed signal
+        self.verticalScrollBar().valueChanged.connect(
+            self.on_vertical_position_changed)
+        self.set_page(0)
 
     def load_page(self, page_number):
+        print("loading page {}".format(page_number))
         res_x = self.dpi_x * self.zoom_factor
         res_y = self.dpi_y * self.zoom_factor
-        image = self.pages[i].renderToImage(resX, resY)
+        image = self.pages[page_number].renderToImage(res_x, res_y)
 
         if image.isNull():
+            print("image is null")
             return
 
         page_item = self.page_scene.addPixmap(QtGui.QPixmap.fromImage(image))
+        m = self.map_from_page(page_number, QtCore.QPointF(0, 0))
+        print(m)
         page_item.setOffset(self.map_from_page(
             page_number, QtCore.QPointF(0, 0)))
         page_item.setData(1, page_number)
@@ -91,31 +109,64 @@ class PdfView(QtWidgets.QGraphicsView):
     def load_visible_pages(self, page_number_start, page_number_end):
         page_count = self.doc.numPages()
         for i in range(max(0, page_number_start), page_number_end):
+            if i >= page_count:
+                break
             if not self.pages_loaded[i]:
                 self.load_page(i)
 
     def clear_pages(self):
         page_count = self.doc.numPages()
         items = self.page_scene.items()
-        for i in range(items.size()):
-            page_number = items[i].data[1].toInt()
-            self.page_scene.removeItem(items[i])
-            del items[i]
+        for i in range(len(items)):
+            page_number = items[i].data(1)
+            if page_number is None:
+                continue
+            if page_number >= 0 and page_number < page_count:
+                self.page_scene.removeItem(items[i])
+                del items[i]
+                self.pages_loaded[page_number] = False
 
     def clear_nonvisible_pages(self, page_number_start, page_number_end):
-        # TODO
-        pass
+        page_count = self.doc.numPages()
+        buf = 25
+        items = self.page_scene.items()
+        for i in range(len(items)):
+            page_number = items[i].data(1)
+            if page_number is None:
+                continue
+            if ((page_number >= 1 and page_number < page_number_start - buf) or
+                    (page_number > page_number_end + buf and
+                        page_number < page_count)):
+                self.page_scene.removeItem(items[i])
+                del items[i]
+                self.pages_loaded[page_number] = False
 
-    def set_page(self, page_number):
+    def set_page(self, page_number, keep_pos=False):
+        print("set page {}".format(page_number))
         page_number_start = page_number
         page_number_end = page_number
         max_top_position = (self.page_top_positions[page_number_start] +
-                            viewport().height() / self.scale_factor_y)
+                            self.viewport().height() / self.scale_factor_y)
         page_count = self.doc.numPages()
         for i in range(page_number_start, page_count):
             if self.page_top_positions[i] > max_top_position:
                 break
+            page_number_end += 1
 
+        # TODO: handle last page
+
+        if page_number_start < 0:
+            page_number_start = 0
+
+        self.load_visible_pages(page_number_start, page_number_end)
+        self.clear_nonvisible_pages(page_number_start, page_number_end)
+
+        if not keep_pos:
+            return
+
+        # vbar = self.verticalScrollBar()
+        # self.verticalScrollBar().valueChanged.connect(
+        #     self.on_vertical_position_changed)
 
     def map_from_page(self, page_number, page_param):
         """
@@ -134,7 +185,8 @@ class PdfView(QtWidgets.QGraphicsView):
             The point or rect in scene coordinates.
         """
         x = (page_param.x() + inter_page_space/2) * self.scale_factor_x
-        y = (page_param.y() + inter_page_space/2) * self.scale_factor_y
+        y = ((page_param.y() + self.page_top_positions[page_number]) *
+             self.scale_factor_y)
 
         if type(page_param) == QtCore.QPointF:
             return QtCore.QPointF(x, y)
@@ -163,7 +215,7 @@ class PdfView(QtWidgets.QGraphicsView):
         y = (scene_param.y() / self.scale_factor_y -
              self.page_top_positions[page_number])
 
-        if type(page_param) == QtCore.QPointF:
+        if type(scene_param) == QtCore.QPointF:
             return QtCore.QPointF(x, y)
         else:
             w = scene_param.width() / self.scale_factor_x
@@ -196,5 +248,25 @@ class PdfView(QtWidgets.QGraphicsView):
         """
         pass
 
-    def on_scroll_position_changed(self, fraction, page_number):
-        pass
+    def on_vertical_position_changed(self, value=None):
+        if value is not None:
+            if self.vertical_position_timer.isActive():
+                self.vertical_position_timer.stop()
+            self.vertical_position_timer.start()
+        else:
+            vbar = self.verticalScrollBar()
+            vbarval = ((vbar.value() + inter_page_space / 2) /
+                       self.scale_factor_y)
+            page_num = 0
+            page_count = self.doc.numPages()
+            for i in range(page_num, page_count):
+                if self.page_top_positions[i] > vbarval:
+                    break
+                page_num += 1
+            page_num -= 1
+            if page_num < 0:
+                page_num = 0
+
+            if self.page_number != page_num:
+                self.set_page(page_num, False)
+                self.page_number = page_num
