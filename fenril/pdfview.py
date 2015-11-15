@@ -2,6 +2,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import popplerqt5
 
 inter_page_space = 10
+max_zoom_factor = 6
+min_zoom_factor = 0.1
+repeat_key_delay_ms = 300
 
 key_map = {
     QtCore.Qt.Key_H: QtCore.Qt.Key_Left,
@@ -22,11 +25,17 @@ class PdfView(QtWidgets.QGraphicsView):
         self.zoom_factor = 1
         self.page_number = 0
 
+        # timer that prevents loading every page when the user scrolls quickly
         self.vertical_position_timer = QtCore.QTimer()
         self.vertical_position_timer.setSingleShot(True)
         self.vertical_position_timer.setInterval(0)
         self.vertical_position_timer.timeout.connect(
             self.on_vertical_position_changed)
+
+        # timer to run when a key like "g" is pressed for "gg" shortcut
+        self.repeat_key_timer = QtCore.QTimer()
+        self.repeat_key_timer.setSingleShot(True)
+        self.repeat_key_timer.setInterval(repeat_key_delay_ms)
 
         self.page_scene = QtWidgets.QGraphicsScene()
         self.setScene(self.page_scene)
@@ -54,7 +63,7 @@ class PdfView(QtWidgets.QGraphicsView):
         self.pages = []
         self.page_top_positions = []
         self.pages_loaded = []
-        max_page_width = 0
+        self.max_page_width = 0
         for i in range(page_count):
             page = self.doc.page(i)
             self.pages.append(page)
@@ -67,7 +76,8 @@ class PdfView(QtWidgets.QGraphicsView):
                        inter_page_space)
                 self.page_top_positions.append(top)
 
-                max_page_width = max(old_size.width(), max_page_width)
+                self.max_page_width = max(old_size.width(),
+                                          self.max_page_width)
 
             page_rect = self.map_from_page(
                 i, QtCore.QRectF(QtCore.QPointF(0, 0), page.pageSizeF()))
@@ -90,7 +100,7 @@ class PdfView(QtWidgets.QGraphicsView):
                 inter_page_space/2))
         self.page_scene.setSceneRect(
             0, 0,
-            (max_page_width+inter_page_space)*self.scale_factor_x+2,
+            (self.max_page_width+inter_page_space)*self.scale_factor_x+2,
             self.page_top_positions[-1]*self.scale_factor_y+2)
 
         self.verticalScrollBar().valueChanged.connect(
@@ -110,7 +120,6 @@ class PdfView(QtWidgets.QGraphicsView):
             return
 
         page_item = self.page_scene.addPixmap(QtGui.QPixmap.fromImage(image))
-        m = self.map_from_page(page_number, QtCore.QPointF(0, 0))
         page_item.setOffset(self.map_from_page(
             page_number, QtCore.QPointF(0, 0)))
         page_item.setData(1, page_number)
@@ -149,10 +158,9 @@ class PdfView(QtWidgets.QGraphicsView):
                     (page_number > page_number_end + buf and
                         page_number < page_count)):
                 self.page_scene.removeItem(items[i])
-                #del items[i]
                 self.pages_loaded[page_number] = False
 
-    def set_page(self, page_number, keep_pos=False):
+    def set_page(self, page_number, update_pos=True, keep_pos=False):
         page_number_start = page_number
         page_number_end = page_number
         max_top_position = (self.page_top_positions[page_number_start] +
@@ -171,12 +179,37 @@ class PdfView(QtWidgets.QGraphicsView):
         self.load_visible_pages(page_number_start, page_number_end)
         self.clear_nonvisible_pages(page_number_start, page_number_end)
 
-        if not keep_pos:
+        page_number_old = self.page_number
+        self.page_number = page_number_start
+
+        if not update_pos:
             return
 
-        # vbar = self.verticalScrollBar()
-        # self.verticalScrollBar().valueChanged.connect(
-        #     self.on_vertical_position_changed)
+        vbar = self.verticalScrollBar()
+        self.verticalScrollBar().valueChanged.connect(
+            self.on_vertical_position_changed)
+
+        if keep_pos:
+            newval = round((
+                self.page_top_positions[self.page_number] *
+                self.scale_factor_y +
+                vbar.value() -
+                self.page_top_positions[page_number_old] *
+                self.scale_factor_y))
+        else:
+            newval = round((
+                (self.page_top_positions[self.page_number] -
+                    inter_page_space/2) *
+                self.scale_factor_y +
+                (self.page_top_positions[self.page_number+1] -
+                    self.page_top_positions[self.page_number] -
+                    inter_page_space) *
+                self.scale_factor_y *
+                (page_number - int(page_number))))
+        vbar.setValue(newval)
+
+        self.verticalScrollBar().valueChanged.connect(
+            self.on_vertical_position_changed)
 
     def map_from_page(self, page_number, page_param):
         """
@@ -258,6 +291,76 @@ class PdfView(QtWidgets.QGraphicsView):
         """
         pass
 
+    def set_zoom_factor(self, value):
+        if (self.zoom_factor == max_zoom_factor and
+                value > max_zoom_factor):
+            return
+        tmp = max(min_zoom_factor, value)
+        self.zoom_factor = min(tmp, max_zoom_factor)
+
+        hbar = self.horizontalScrollBar()
+        vbar = self.verticalScrollBar()
+        old_h = hbar.value()
+        old_v = vbar.value()
+        old_hmax = hbar.maximum()
+        old_vmax = vbar.maximum()
+
+        self.page_number = -1
+        self.page_scene.clear()
+        page_count = self.doc.numPages()
+        max_pg_width = 0
+        for i in range(page_count):
+            page_size = self.pages[i].pageSizeF()
+            max_pg_width = max(page_size.width(), max_pg_width)
+            page_rect = self.map_from_page(
+                i, QtCore.QRectF(QtCore.QPointF(0, 0), page_size))
+            # black border
+            rect = self.page_scene.addRect(
+                page_rect, QtGui.QPen(QtGui.QBrush(QtCore.Qt.black), 1))
+            rect.setZValue(1)
+            rect.setData(0, i)
+            # white background
+            self.page_scene.addRect(
+                page_rect, QtGui.QPen(), QtGui.QBrush(QtCore.Qt.white))
+            self.pages_loaded[i] = False
+
+        self.page_scene.setSceneRect(
+            0, 0,
+            (self.max_page_width+inter_page_space)*self.scale_factor_x+2,
+            self.page_top_positions[-1]*self.scale_factor_y+2)
+
+        if old_hmax > 0:
+            hbar.setValue(int(hbar.maximum()/old_hmax*old_h))
+        vbar.setValue(int(vbar.maximum()/old_vmax*old_v))
+
+        if old_v == 0 or old_v == old_vmax:
+            if old_v == 0:
+                self.page_number = 0
+            else:
+                self.page_number = page_count - 1
+            self.set_page(self.page_number)
+            vbar.setValue(int(vbar.maximum()/old_vmax*old_v))
+
+    def zoom_in(self):
+        factor = 0.1
+        if self.zoom_factor > 0.99:
+            if self.zoom_factor > 1.99:
+                factor = 0.5
+            else:
+                factor = 0.2
+
+        self.set_zoom_factor(self.zoom_factor + factor)
+
+    def zoom_out(self):
+        factor = 0.1
+        if self.zoom_factor > 1.01:
+            if self.zoom_factor > 2.01:
+                factor = 0.5
+            else:
+                factor = 0.2
+
+        self.set_zoom_factor(self.zoom_factor - factor)
+
     def on_vertical_position_changed(self, value=None):
         if value is not None:
             if self.vertical_position_timer.isActive():
@@ -277,19 +380,40 @@ class PdfView(QtWidgets.QGraphicsView):
                 page_num = 0
 
             if self.page_number != page_num:
-                self.set_page(page_num, False)
+                self.set_page(page_num, update_pos=False)
                 self.page_number = page_num
 
     def keyPressEvent(self, event):
-        newevent = None
         key = event.key()
+
+        # remapped direction keys
         if key in key_map:
             newevent = QtGui.QKeyEvent(QtCore.QEvent.KeyPress,
                                        key_map[key],
                                        event.modifiers())
-
-        if newevent is not None:
             super().keyPressEvent(newevent)
+        # "G" -> bottom of document
+        elif (event.modifiers() & QtCore.Qt.ShiftModifier and
+                key == QtCore.Qt.Key_G):
+            self.set_page(self.doc.numPages()-1)
+        # "gg" -> top of document
+        elif key == QtCore.Qt.Key_G:
+            if self.repeat_key_timer.isActive():
+                self.repeat_key_timer.stop()
+                self.set_page(0)
+            else:
+                self.repeat_key_timer.start()
         else:
             super().keyPressEvent(event)
 
+    def wheelEvent(self, event):
+        if event.modifiers() & QtCore.Qt.ControlModifier:
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            else:
+                self.zoom_out()
+        elif event.modifiers() & QtCore.Qt.ShiftModifier:
+            self.horizontalScrollBar().event(event)
+
+        else:
+            super().wheelEvent(event)
