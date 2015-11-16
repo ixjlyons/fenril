@@ -112,11 +112,10 @@ class LibraryTableModel(QAbstractTableModel):
         self.layoutAboutToBeChanged.emit()
 
         colname = self.COLS[column]
-        if order == Qt.AscendingOrder:
-            self.entries = sorted(self.entries, key=lambda k: k[colname])
-        else:
-            self.entries = sorted(
-                self.entries, key=lambda k: k[colname], reverse=True)
+        reverse = True if order == Qt.AscendingOrder else False
+        self.entries = sorted(self.entries,
+                              key=lambda k: _get_val(k, colname),
+                              reverse=reverse)
 
         self.layoutChanged.emit()
 
