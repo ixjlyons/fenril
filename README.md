@@ -3,8 +3,9 @@ fenril
 
 **This project is a work in progress. Most of this README is a lie.**
 
-fenril is a reference viewer. The name is an anagram of "nil" (meaning nothing)
-and "ref" (meaning reference). It is not a reference *manager*.
+fenril is a Qt5 reference viewer. The name is an anagram of "nil" (meaning nothing)
+and "ref" (meaning reference). It is not a reference *manager*. It is the
+product of my frustration with reference managers that do too much.
 
 You need the following:
 
@@ -13,7 +14,8 @@ You need the following:
   choice](http://www.vim.org/) and add it.
 
 * A folder of pdfs corresponding to the items in your library. The name of the
-  file should match the citation ID.
+  file should match the citation ID. If you update the citation ID in your bib
+  file, you should update the name of the pdf as well.
 
 * A config file specifying where the above two items are located on your
   computer.
@@ -33,10 +35,20 @@ Dependencies
 * [python-poppler-qt5](https://github.com/wbsoft/python-poppler-qt5)
 
 
+Migrating
+---------
+
+I made a little script to migrate from Mendeley
+(`tools/migrate_from_mendeley.py`). You should set up Mendeley to
+sync your library with a single BibTeX file. Point the script to that file, and
+you should have a new bib file stripped of a few of the keys Mendeley adds and
+a folder with all of your pdfs renamed to the corresponding citation ID.
+
+
 Acknowledgments
 ---------------
 
-The embedded viewer code has been directly guided by
-[PdfViewer](http://qt-apps.org/content/show.php?content=149637). It might be
-a better option to figure out how to use the library component of that project
-and embed the `PdfView` view.
+The embedded pdf viewer code has been directly guided by
+[PdfViewer](http://qt-apps.org/content/show.php?content=149637). Displaying
+a pdf is certainly not a trivial exercise, so that project has been incredibly
+helpful.
