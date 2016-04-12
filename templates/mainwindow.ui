@@ -89,7 +89,7 @@
    <addaction name="menu_File"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <widget class="QDockWidget" name="dockWidget_2">
+  <widget class="QDockWidget" name="dockWidget">
    <property name="minimumSize">
     <size>
      <width>250</width>
@@ -108,7 +108,7 @@
    <attribute name="dockWidgetArea">
     <number>2</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents_2"/>
+   <widget class="QWidget" name="dockWidgetContents"/>
   </widget>
   <action name="actionQuit">
    <property name="icon">

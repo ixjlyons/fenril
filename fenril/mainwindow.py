@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QMainWindow
 
 from fenril.ui.mainwindow import Ui_MainWindow
 from fenril import docwidget
+from fenril import docdetailswidget
 
 
 class MainWindow(QMainWindow):
@@ -23,7 +24,8 @@ class MainWindow(QMainWindow):
             self.init_bib(bibfile)
 
         self.doc_tabs = []
-        self.ui.tableView.doubleClicked.connect(self.on_item_doubleclick)
+        self.ui.tableView.clicked.connect(self.on_selection_changed)
+        self.ui.tableView.activated.connect(self.on_item_activated)
 
         self.init_tab_widget()
 
@@ -53,7 +55,11 @@ class MainWindow(QMainWindow):
         self.ui.tabWidget.widget(index).close()
         self.ui.tabWidget.removeTab(index)
 
-    def on_item_doubleclick(self, index):
+    def on_selection_changed(self, index):
+        entry = self.ui.tableView.model().item(index)
+        docdetailswidget.inflate(self.ui.dockWidgetContents, entry)
+
+    def on_item_activated(self, index):
         if self.pdfdir is None:
             return
 
